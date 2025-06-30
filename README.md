@@ -29,6 +29,9 @@ swiftc quickss.swift -o quickss
 # Save with custom filename
 ./quickss --file "custom.png"
 
+# Keep original retina resolution
+./quickss --no-resize
+
 # Show help message
 ./quickss --help
 ```
@@ -48,6 +51,7 @@ Taking continuous shots of top window every 5 seconds
 
 - `--file <filename>`: Specify custom filename or path for the screenshot
 - `--clipboard`: Copy screenshot to clipboard instead of saving to file
+- `--no-resize`: Keep original retina resolution (default is to resize for smaller files)
 - `-h, --help`: Display help message and usage information
 
 Note: `--clipboard` and `--file` options are mutually exclusive.
