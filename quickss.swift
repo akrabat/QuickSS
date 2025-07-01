@@ -15,6 +15,7 @@ enum ScreenshotError: Error, LocalizedError {
     case invalidArguments(String)
     case conflictingOptions(String)
     case imageLoadingFailed(String)
+    case filePathValidationFailed(String)
     
     var errorDescription: String? {
         switch self {
@@ -32,6 +33,8 @@ enum ScreenshotError: Error, LocalizedError {
             return "Conflicting options: \(message)"
         case .imageLoadingFailed(let message):
             return "Image loading failed: \(message)"
+        case .filePathValidationFailed(let message):
+            return "File validation failed: \(message)"
         }
     }
 }
@@ -118,6 +121,33 @@ func parseArguments() throws -> Arguments {
         shouldResize: shouldResize,
         quietMode: quietMode
     )
+}
+
+func validateFilePath(_ filePath: URL) throws {
+    let fileManager = FileManager.default
+    let parentDirectory = filePath.deletingLastPathComponent()
+    
+    // Check if parent directory exists and is a directory
+    guard fileManager.fileExists(atPath: parentDirectory.path) else {
+        throw ScreenshotError.filePathValidationFailed("Directory does not exist: \(parentDirectory.path)")
+    }
+    
+    let resourceValues = try parentDirectory.resourceValues(forKeys: [.isDirectoryKey])
+    guard resourceValues.isDirectory == true else {
+        throw ScreenshotError.filePathValidationFailed("Path is not a directory: \(parentDirectory.path)")
+    }
+    
+    // Check if parent directory is writable
+    if !fileManager.isWritableFile(atPath: parentDirectory.path) {
+        throw ScreenshotError.filePathValidationFailed("Directory is not writable: \(parentDirectory.path)")
+    }
+    
+    // If file already exists, check if it's writable
+    if fileManager.fileExists(atPath: filePath.path) {
+        if !fileManager.isWritableFile(atPath: filePath.path) {
+            throw ScreenshotError.filePathValidationFailed("File is not writable: \(filePath.path)")
+        }
+    }
 }
 
 func getScreenshotFilePath(customFilename: String?) -> URL {
@@ -296,8 +326,15 @@ func main() async {
             exit(0)
         }
 
-        let (windowID, windowScreen) = try getActiveWindowInfo(quietMode: options.quietMode)
         let screenshotURL = options.toClipboard ? nil : getScreenshotFilePath(customFilename: options.customFilename)
+        // Validate file path if not copying to clipboard
+        if let screenshotURL = screenshotURL {
+            try validateFilePath(screenshotURL)
+        }
+        
+        // Find the active window
+        let (windowID, windowScreen) = try getActiveWindowInfo(quietMode: options.quietMode)
+
         try await takeActiveWindowScreenshot(windowID: windowID, screenshotURL: screenshotURL, shouldResize: options.shouldResize, screen: windowScreen, quietMode: options.quietMode)
         exit(0)
         
