@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 
 let version = "1.0.0"
 
-// MARK: - Error Types
+// MARK: - Types
 
 enum ScreenshotError: Error, LocalizedError {
     case unableToGetWindowList
@@ -36,6 +36,14 @@ enum ScreenshotError: Error, LocalizedError {
     }
 }
 
+struct Arguments {
+    let customFilename: String?
+    let shouldShowHelp: Bool
+    let toClipboard: Bool
+    let shouldResize: Bool
+    let quietMode: Bool
+}
+
 // MARK: - Helper Functions
 
 func printHelp() {
@@ -64,7 +72,7 @@ The screenshot will be saved to ~/Downloads/ by default.
 """)
 }
 
-func parseArguments() throws -> (customFilename: String?, shouldShowHelp: Bool, toClipboard: Bool, shouldResize: Bool, quietMode: Bool) {
+func parseArguments() throws -> Arguments {
     let args = CommandLine.arguments
     var customFilename: String? = nil
     var shouldShowHelp = false
@@ -103,7 +111,13 @@ func parseArguments() throws -> (customFilename: String?, shouldShowHelp: Bool, 
         throw ScreenshotError.conflictingOptions("--clipboard and --file cannot be used together")
     }
     
-    return (customFilename, shouldShowHelp, toClipboard, shouldResize, quietMode)
+    return Arguments(
+        customFilename: customFilename,
+        shouldShowHelp: shouldShowHelp,
+        toClipboard: toClipboard,
+        shouldResize: shouldResize,
+        quietMode: quietMode
+    )
 }
 
 func getScreenshotFilePath(customFilename: String?) -> URL {
@@ -275,16 +289,16 @@ func takeActiveWindowScreenshot(windowID: CGWindowID, screenshotURL: URL?, shoul
 
 func main() async {
     do {
-        let (customFilename, shouldShowHelp, toClipboard, shouldResize, quietMode) = try parseArguments()
+        let options = try parseArguments()
 
-        if shouldShowHelp {
+        if options.shouldShowHelp {
             printHelp()
             exit(0)
         }
 
-        let (windowID, windowScreen) = try getActiveWindowInfo(quietMode: quietMode)
-        let screenshotURL = toClipboard ? nil : getScreenshotFilePath(customFilename: customFilename)
-        try await takeActiveWindowScreenshot(windowID: windowID, screenshotURL: screenshotURL, shouldResize: shouldResize, screen: windowScreen, quietMode: quietMode)
+        let (windowID, windowScreen) = try getActiveWindowInfo(quietMode: options.quietMode)
+        let screenshotURL = options.toClipboard ? nil : getScreenshotFilePath(customFilename: options.customFilename)
+        try await takeActiveWindowScreenshot(windowID: windowID, screenshotURL: screenshotURL, shouldResize: options.shouldResize, screen: windowScreen, quietMode: options.quietMode)
         exit(0)
         
     } catch {
