@@ -49,6 +49,7 @@ OPTIONS:
     --file <filename>   Specify custom filename for the screenshot
     --clipboard         Copy screenshot to clipboard instead of saving to file
     --no-resize         Keep original retina resolution (default is to resize for smaller files)
+    -q, --quiet         Quiet mode: only output filename or clipboard message
     -h, --help          Show this help message
 
 EXAMPLES:
@@ -63,12 +64,13 @@ The screenshot will be saved to ~/Downloads/ by default.
 """)
 }
 
-func parseArguments() throws -> (customFilename: String?, shouldShowHelp: Bool, toClipboard: Bool, shouldResize: Bool) {
+func parseArguments() throws -> (customFilename: String?, shouldShowHelp: Bool, toClipboard: Bool, shouldResize: Bool, quietMode: Bool) {
     let args = CommandLine.arguments
     var customFilename: String? = nil
     var shouldShowHelp = false
     var toClipboard = false
     var shouldResize = true
+    var quietMode = false
     
     var i = 1
     while i < args.count {
@@ -87,6 +89,8 @@ func parseArguments() throws -> (customFilename: String?, shouldShowHelp: Bool, 
             toClipboard = true
         } else if arg == "--no-resize" {
             shouldResize = false
+        } else if arg == "--quiet" || arg == "-q" {
+            quietMode = true
         } else {
             throw ScreenshotError.invalidArguments("Unknown argument '\(arg)'. Use -h or --help for usage information")
         }
@@ -99,7 +103,7 @@ func parseArguments() throws -> (customFilename: String?, shouldShowHelp: Bool, 
         throw ScreenshotError.conflictingOptions("--clipboard and --file cannot be used together")
     }
     
-    return (customFilename, shouldShowHelp, toClipboard, shouldResize)
+    return (customFilename, shouldShowHelp, toClipboard, shouldResize, quietMode)
 }
 
 func getScreenshotFilePath(customFilename: String?) -> URL {
@@ -189,7 +193,7 @@ func processImage(tempURL: URL, outputURL: URL?, toClipboard: Bool, shouldResize
 
 // MARK: - Screenshot Functions
 
-func getActiveWindowInfo() throws -> (windowID: CGWindowID, screen: NSScreen?) {
+func getActiveWindowInfo(quietMode: Bool) throws -> (windowID: CGWindowID, screen: NSScreen?) {
     guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
         throw ScreenshotError.unableToGetWindowList
     }
@@ -206,7 +210,9 @@ func getActiveWindowInfo() throws -> (windowID: CGWindowID, screen: NSScreen?) {
         }
         
         if windowLayer == 0 {
-            print("Capturing window ID: \(windowID) [\(ownerName): '\(title)']")
+            if !quietMode {
+                print("Capturing window ID: \(windowID) [\(ownerName): '\(title)']")
+            }
             
             // Find the screen containing this window
             let windowBounds = CGRect(
@@ -228,7 +234,7 @@ func getActiveWindowInfo() throws -> (windowID: CGWindowID, screen: NSScreen?) {
 }
 
 @MainActor
-func takeActiveWindowScreenshot(windowID: CGWindowID, screenshotURL: URL?, shouldResize: Bool, screen: NSScreen?) async throws {
+func takeActiveWindowScreenshot(windowID: CGWindowID, screenshotURL: URL?, shouldResize: Bool, screen: NSScreen?, quietMode: Bool) async throws {
     // Always capture to temp file first for processing
     let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("quickss_temp.png")
     
@@ -249,7 +255,11 @@ func takeActiveWindowScreenshot(windowID: CGWindowID, screenshotURL: URL?, shoul
         try await processImage(tempURL: tempURL, outputURL: screenshotURL, toClipboard: toClipboard, shouldResize: shouldResize, screen: screen)
         
         if let screenshotURL = screenshotURL {
-            print("Screenshot saved to: \(screenshotURL.path)")
+            if quietMode {
+                print(screenshotURL.path)
+            } else {
+                print("Screenshot saved to: \(screenshotURL.path)")
+            }
         } else {
             print("Screenshot copied to clipboard")
         }
@@ -265,16 +275,16 @@ func takeActiveWindowScreenshot(windowID: CGWindowID, screenshotURL: URL?, shoul
 
 func main() async {
     do {
-        let (customFilename, shouldShowHelp, toClipboard, shouldResize) = try parseArguments()
+        let (customFilename, shouldShowHelp, toClipboard, shouldResize, quietMode) = try parseArguments()
 
         if shouldShowHelp {
             printHelp()
             exit(0)
         }
 
-        let (windowID, windowScreen) = try getActiveWindowInfo()
+        let (windowID, windowScreen) = try getActiveWindowInfo(quietMode: quietMode)
         let screenshotURL = toClipboard ? nil : getScreenshotFilePath(customFilename: customFilename)
-        try await takeActiveWindowScreenshot(windowID: windowID, screenshotURL: screenshotURL, shouldResize: shouldResize, screen: windowScreen)
+        try await takeActiveWindowScreenshot(windowID: windowID, screenshotURL: screenshotURL, shouldResize: shouldResize, screen: windowScreen, quietMode: quietMode)
         exit(0)
         
     } catch {
