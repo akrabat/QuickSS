@@ -2,6 +2,8 @@
 
 ## Next
 
+## 1.1.0
+
 - Create screenshot at perceived size, not retina size. Provide `--no-resize` to disable this.
 - Add `--quiet` (& `-q`) option to suppress output messages
 
