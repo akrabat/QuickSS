@@ -17,6 +17,14 @@ Download the latest binary from the [releases page](https://github.com/akrabat/q
 swiftc quickss.swift -o quickss
 ```
 
+## Alfred Workflow
+
+An Alfred Workflow is provided on the [releases page](https://github.com/akrabat/quickss/releases).
+
+- Press `control+option+command+4` to take a screenshot of the active window and put onto the clipboard.
+- Press `shift+control+option+command+4` to take a screenshot of the active window and save the file to the Downloads folder.
+- Alternatively, use the `screenshot` keyword in Alfred.
+
 ## Usage
 
 ```bash
