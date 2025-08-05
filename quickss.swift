@@ -16,6 +16,7 @@ enum ScreenshotError: Error, LocalizedError {
     case conflictingOptions(String)
     case imageLoadingFailed(String)
     case filePathValidationFailed(String)
+    case screenshotCancelled
     
     var errorDescription: String? {
         switch self {
@@ -35,6 +36,8 @@ enum ScreenshotError: Error, LocalizedError {
             return "Image loading failed: \(message)"
         case .filePathValidationFailed(let message):
             return "File validation failed: \(message)"
+        case .screenshotCancelled:
+            return "Screenshot cancelled by user"
         }
     }
 }
@@ -45,6 +48,7 @@ struct Arguments {
     let toClipboard: Bool
     let shouldResize: Bool
     let quietMode: Bool
+    let interactiveMode: Bool
 }
 
 // MARK: - Helper Functions
@@ -59,6 +63,7 @@ USAGE:
 OPTIONS:
     --file <filename>   Specify custom filename for the screenshot
     --clipboard         Copy screenshot to clipboard instead of saving to file
+    --interactive       Interactive mode: select area/window to capture
     --no-resize         Keep original retina resolution (default is to resize for smaller files)
     -q, --quiet         Quiet mode: only output filename or clipboard message
     -h, --help          Show this help message
@@ -67,6 +72,8 @@ EXAMPLES:
     quickss
     quickss --file "my-screenshot.png"
     quickss --file "/path/to/custom/screenshot.png"
+    quickss --interactive
+    quickss --interactive --clipboard
     quickss --no-resize
     quickss --clipboard
     quickss --clipboard --no-resize
@@ -82,6 +89,7 @@ func parseArguments() throws -> Arguments {
     var toClipboard = false
     var shouldResize = true
     var quietMode = false
+    var interactiveMode = false
     
     var i = 1
     while i < args.count {
@@ -102,6 +110,8 @@ func parseArguments() throws -> Arguments {
             shouldResize = false
         } else if arg == "--quiet" || arg == "-q" {
             quietMode = true
+        } else if arg == "--interactive" {
+            interactiveMode = true
         } else {
             throw ScreenshotError.invalidArguments("Unknown argument '\(arg)'. Use -h or --help for usage information")
         }
@@ -119,7 +129,8 @@ func parseArguments() throws -> Arguments {
         shouldShowHelp: shouldShowHelp,
         toClipboard: toClipboard,
         shouldResize: shouldResize,
-        quietMode: quietMode
+        quietMode: quietMode,
+        interactiveMode: interactiveMode
     )
 }
 
@@ -278,13 +289,20 @@ func getActiveWindowInfo(quietMode: Bool) throws -> (windowID: CGWindowID, scree
 }
 
 @MainActor
-func takeActiveWindowScreenshot(windowID: CGWindowID, screenshotURL: URL?, shouldResize: Bool, screen: NSScreen?, quietMode: Bool) async throws {
+func takeScreenshot(windowID: CGWindowID?, screenshotURL: URL?, shouldResize: Bool, screen: NSScreen?, quietMode: Bool) async throws {
     // Always capture to temp file first for processing
     let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("quickss_temp.png")
     
     let task = Process()
     task.launchPath = "/usr/sbin/screencapture"
-    task.arguments = ["-x", "-l", String(windowID), tempURL.path]
+    
+    if let windowID = windowID {
+        // we have a window ID, use it for capturing
+        task.arguments = ["-x", "-l", String(windowID), tempURL.path]
+    } else {
+        // No window ID provided, use interactive mode
+        task.arguments = ["-x", "-i", tempURL.path]
+    }
     
     do {
         try task.run()
@@ -292,6 +310,11 @@ func takeActiveWindowScreenshot(windowID: CGWindowID, screenshotURL: URL?, shoul
         
         guard task.terminationStatus == 0 else {
             throw ScreenshotError.screencaptureCommandFailed(status: task.terminationStatus)
+        }
+        
+        // Check if temp file was created (user might have cancelled with escape)
+        guard FileManager.default.fileExists(atPath: tempURL.path) else {
+            throw ScreenshotError.screenshotCancelled
         }
         
         // Process the image (resize if retina and enabled) and save/copy as needed
@@ -332,10 +355,15 @@ func main() async {
             try validateFilePath(screenshotURL)
         }
         
-        // Find the active window
-        let (windowID, windowScreen) = try getActiveWindowInfo(quietMode: options.quietMode)
-
-        try await takeActiveWindowScreenshot(windowID: windowID, screenshotURL: screenshotURL, shouldResize: options.shouldResize, screen: windowScreen, quietMode: options.quietMode)
+        if options.interactiveMode {
+            // Interactive mode: use screencapture -i, no need to find active window
+            try await takeScreenshot(windowID: nil, screenshotURL: screenshotURL, shouldResize: options.shouldResize, screen: nil, quietMode: options.quietMode)
+        } else {
+            // Standard mode: find the active window and capture it
+            let (windowID, windowScreen) = try getActiveWindowInfo(quietMode: options.quietMode)
+            try await takeScreenshot(windowID: windowID, screenshotURL: screenshotURL, shouldResize: options.shouldResize, screen: windowScreen, quietMode: options.quietMode)
+        }
+        
         exit(0)
         
     } catch {
