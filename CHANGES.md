@@ -2,6 +2,7 @@
 
 ## Next
 
+- Add `--interactive` option for interactive screenshot selection using `screencapture -i`.
 - Change default filename to `YYYY-MM-DD Screenshot.png`.
 
 ## 1.1.0
