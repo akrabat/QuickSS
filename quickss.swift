@@ -161,7 +161,7 @@ func getScreenshotFilePath(customFilename: String?) -> URL {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
         let timestamp = formatter.string(from: Date())
-        let filename = "Screenshot \(timestamp).png"
+        let filename = "\(timestamp) Screenshot.png"
         return downloadsURL.appendingPathComponent(filename)
     }
 }
