@@ -366,6 +366,13 @@ func main() async {
         
         exit(0)
         
+    } catch let error as ScreenshotError {
+        if case .screenshotCancelled = error {
+            // User cancelled - exit silently with success code
+            exit(0)
+        }
+        print("Error: \(error.localizedDescription)")
+        exit(1)
     } catch {
         print("Error: \(error.localizedDescription)")
         exit(1)
