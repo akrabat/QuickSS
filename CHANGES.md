@@ -2,6 +2,8 @@
 
 ## Next
 
+- Interative cancellation is no longer an error.
+
 ## 1.2.0
 
 - Add `--interactive` option for interactive screenshot selection using `screencapture -i`.
