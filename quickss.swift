@@ -179,13 +179,23 @@ func getScreenshotFilePath(customFilename: String?) -> URL {
 
 // MARK: - Image Processing Functions
 
-func resizeImageIfRetina(cgImage: CGImage, screen: NSScreen?) -> CGImage {
+func resizeImageIfRetina(cgImage: CGImage, screen: NSScreen?, quietMode: Bool) -> CGImage {
     // Use the provided screen, fall back to main screen if none provided
-    let targetScreen = screen ?? NSScreen.main
-    guard let actualScreen = targetScreen else { return cgImage }
+    guard let screen = screen else {
+        if !quietMode {
+            print("No screen information available, skipping resize")
+        }
+        return cgImage
+    }
     
-    let scaleFactor = actualScreen.backingScaleFactor
+    let scaleFactor = screen.backingScaleFactor
+    if !quietMode {
+        print("Detected screen scale factor: \(scaleFactor)x")
+    }
     guard scaleFactor > 1.0 else { return cgImage }
+    if !quietMode {
+        print("Resizing")
+    }
 
     // Resize using Lanczos filter
     let inputImage = CIImage(cgImage: cgImage)
@@ -206,7 +216,7 @@ func resizeImageIfRetina(cgImage: CGImage, screen: NSScreen?) -> CGImage {
     return cgOutput
 }
 
-func processImage(tempURL: URL, outputURL: URL?, toClipboard: Bool, shouldResize: Bool, screen: NSScreen?) async throws {
+func processImage(tempURL: URL, outputURL: URL?, toClipboard: Bool, shouldResize: Bool, screen: NSScreen?, quietMode: Bool) async throws {
     // Load the image
     guard let imageData = try? Data(contentsOf: tempURL) else {
         throw ScreenshotError.imageLoadingFailed("Failed to read temp image file from \(tempURL.path)")
@@ -221,7 +231,7 @@ func processImage(tempURL: URL, outputURL: URL?, toClipboard: Bool, shouldResize
     }
     
     // Resize if on retina display and resize is enabled
-    let processedImage = shouldResize ? resizeImageIfRetina(cgImage: cgImage, screen: screen) : cgImage
+    let processedImage = shouldResize ? resizeImageIfRetina(cgImage: cgImage, screen: screen, quietMode: quietMode) : cgImage
     
     // Convert to PNG data
     let mutableData = NSMutableData()
@@ -319,7 +329,7 @@ func takeScreenshot(windowID: CGWindowID?, screenshotURL: URL?, shouldResize: Bo
         
         // Process the image (resize if retina and enabled) and save/copy as needed
         let toClipboard = screenshotURL == nil
-        try await processImage(tempURL: tempURL, outputURL: screenshotURL, toClipboard: toClipboard, shouldResize: shouldResize, screen: screen)
+        try await processImage(tempURL: tempURL, outputURL: screenshotURL, toClipboard: toClipboard, shouldResize: shouldResize, screen: screen, quietMode: quietMode)
         
         if let screenshotURL = screenshotURL {
             if quietMode {
@@ -357,7 +367,8 @@ func main() async {
         
         if options.interactiveMode {
             // Interactive mode: use screencapture -i, no need to find active window
-            try await takeScreenshot(windowID: nil, screenshotURL: screenshotURL, shouldResize: options.shouldResize, screen: nil, quietMode: options.quietMode)
+            let (_, windowScreen) = try getActiveWindowInfo(quietMode: true)
+            try await takeScreenshot(windowID: nil, screenshotURL: screenshotURL, shouldResize: options.shouldResize, screen: windowScreen, quietMode: options.quietMode)
         } else {
             // Standard mode: find the active window and capture it
             let (windowID, windowScreen) = try getActiveWindowInfo(quietMode: options.quietMode)
