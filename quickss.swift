@@ -3,7 +3,7 @@ import CoreImage
 import Foundation
 import UniformTypeIdentifiers
 
-let version = "1.2.0"
+let version = "1.3.0"
 
 // MARK: - Types
 

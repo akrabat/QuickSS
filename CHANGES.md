@@ -2,7 +2,10 @@
 
 ## Next
 
+## 1.3.0
+
 - Interative cancellation is no longer an error.
+- Better detection of retina screen when in interactive mode by using the active window. 
 
 ## 1.2.0
 
